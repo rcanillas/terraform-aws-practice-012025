@@ -1,0 +1,8 @@
+les trucs à terraformer:
+la bucket (création de dossier ça se fait dans le code)
+la lambda
+le trigger de la lambda
+le rôle pour la lambda (lecture + écriture dans la bucket + accès à Textract)
+Et ça m'a l'air d'être tout.
+Les trucs à implémenter:
+le code python dans la lambda qui récupère le contenu, le fait passer à textract et le repose dans la bucket
