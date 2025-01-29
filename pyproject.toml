@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lambda_function_test"
+version = "0.1.0"
+dependencies = [
+    "boto3>=1.36.7",
+    "pymupdf>=1.25.2"
+]

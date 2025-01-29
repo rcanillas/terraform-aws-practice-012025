@@ -40,6 +40,47 @@ resource "aws_iam_policy_attachment" "lambda_basic_execution" {
   roles      = [aws_iam_role.iam_for_lambda.name]
 }
 
+resource "aws_iam_policy_attachment" "lambda_textract_access" {
+  name       = "textract-lambda-attachment"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonTextractFullAccess"
+  roles      = [aws_iam_role.iam_for_lambda.name]
+}
+
+resource "aws_iam_policy" "s3_policy" {
+  name        = "s3-policy"
+  description = "s3 policy for bucket"
+
+
+  policy = <<EOF
+   {
+"Version": "2012-10-17",
+"Statement": [
+    {
+        "Effect": "Allow",
+        "Action": [
+            "logs:*"
+        ],
+        "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+        "Effect": "Allow",
+        "Action": [
+            "s3:*"
+        ],
+        "Resource": "${aws_s3_bucket.test_bucket.arn}}"
+    }
+]
+
+} 
+    EOF
+}
+
+resource "aws_iam_policy_attachment" "lambda_s3_access" {
+  name       = "s3-lambda-attachment"
+  policy_arn = aws_iam_policy.s3_policy.arn
+  roles      = [aws_iam_role.iam_for_lambda.name]
+}
+
 resource "aws_iam_role" "iam_for_lambda" {
   name               = "iam_for_lambda"
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
