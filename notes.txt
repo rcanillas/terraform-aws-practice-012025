@@ -1,0 +1,5 @@
+- Utiliser docker pour la lambda ? plus pratique pour le dev 
+- faire x lambdas (pdf->image, image->text, text->summary) ?
+- possibilité de remplacer pdf->image par pdf->text avec lib de parsing ?
+- automatiser le test avec le rôle IAM de la lambda pour tester toutes les autorisations ? Récupérer les AK/SK avec les outputs de terraform puis configurer boto3 avec le rôle
+- Faire un module pour le layer

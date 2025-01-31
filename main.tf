@@ -87,20 +87,27 @@ resource "aws_iam_role" "iam_for_lambda" {
 }
 
 data "archive_file" "lambda" {
-  type        = "zip"
-  source_file = "main.py"
+  type        = "zip" 
+  source_dir = "${path.module}/python/"
   output_path = "lambda_function_payload.zip"
 }
 
-resource "aws_lambda_function" "test_lambda" {
-  filename      = "lambda_function_payload.zip"
-  function_name = "lambda_function_test"
-  role          = aws_iam_role.iam_for_lambda.arn
-  handler       = "main.lambda_handler"
+#resource "aws_lambda_layer_version" "textract_layer" {
+#  layer_name          = "textract_layer"
+#  filename            = "lambda-layer.zip"
+#  compatible_runtimes = [var.python_runtime]
+#}
 
+resource "aws_lambda_function" "test_lambda" {
+  filename         = "lambda_function_payload.zip"
+  function_name    = "lambda_function_test"
+  role             = aws_iam_role.iam_for_lambda.arn
+  handler          = "${var.python_module}.lambda_handler"
+  #layers           = [aws_lambda_layer_version.textract_layer.arn]
   source_code_hash = data.archive_file.lambda.output_base64sha256
 
-  runtime = "python3.12"
+  runtime = var.python_runtime
 
 }
+
 

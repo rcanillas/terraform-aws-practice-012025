@@ -38,3 +38,6 @@ terraform.rc
 build/*
 *.egg-info
 .venv
+*.zip
+.aider*
+python/*
