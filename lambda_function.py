@@ -1,5 +1,6 @@
 import sys
 
+# making sure dependencies are found
 sys.path.append("/opt/python")
 
 import boto3
@@ -7,7 +8,79 @@ import pymupdf
 import tempfile
 import io
 import json
+import logging
 from PIL import Image, ImageDraw
+from pprint import pprint
+
+
+def get_rows_columns_map(table_result, blocks_map):
+    rows = {}
+    scores = []
+    for relationship in table_result["Relationships"]:
+        if relationship["Type"] == "CHILD":
+            for child_id in relationship["Ids"]:
+                cell = blocks_map[child_id]
+                if cell["BlockType"] == "CELL":
+                    row_index = cell["RowIndex"]
+                    col_index = cell["ColumnIndex"]
+                    if row_index not in rows:
+                        # create new row
+                        rows[row_index] = {}
+
+                    # get confidence score
+                    scores.append(str(cell["Confidence"]))
+
+                    # get the text value
+                    rows[row_index][col_index] = get_text(cell, blocks_map)
+    return rows, scores
+
+
+def get_text(result, blocks_map):
+    text = ""
+    if "Relationships" in result:
+        for relationship in result["Relationships"]:
+            if relationship["Type"] == "CHILD":
+                for child_id in relationship["Ids"]:
+                    word = blocks_map[child_id]
+                    if word["BlockType"] == "WORD":
+                        if (
+                            "," in word["Text"]
+                            and word["Text"].replace(",", "").isnumeric()
+                        ):
+                            text += '"' + word["Text"] + '"' + " "
+                        else:
+                            text += word["Text"] + " "
+                    if word["BlockType"] == "SELECTION_ELEMENT":
+                        if word["SelectionStatus"] == "SELECTED":
+                            text += "X "
+    return text
+
+
+def generate_table_csv(table_result, blocks_map, table_index):
+    rows, scores = get_rows_columns_map(table_result, blocks_map)
+
+    table_id = "Table_" + str(table_index)
+
+    # get cells.
+    csv = "Table: {0}\n\n".format(table_id)
+
+    for row_index, cols in rows.items():
+        for col_index, text in cols.items():
+            col_indices = len(cols.items())
+            csv += "{}".format(text) + ","
+        csv += "\n"
+
+    csv += "\n\n Confidence Scores % (Table Cell) \n"
+    cols_count = 0
+    for score in scores:
+        cols_count += 1
+        csv += score + ","
+        if cols_count == col_indices:
+            csv += "\n"
+            cols_count = 0
+
+    csv += "\n\n\n"
+    return csv
 
 
 def lambda_handler(event, context):
@@ -52,23 +125,8 @@ def lambda_handler(event, context):
         # Get the text blocks
         blocks = detection_response["Blocks"]
         width, height = image.size
-        print("Detected Document Text")
-
-        # Create image showing bounding box/polygon the detected lines/text
         page_text = []
         for block in blocks:
-            # Display information about a block returned by text detection
-            print("Type: " + block["BlockType"])
-            if block["BlockType"] != "PAGE":
-                print("Detected: " + block["Text"])
-                print("Confidence: " + "{:.2f}".format(block["Confidence"]) + "%")
-
-            print("Id: {}".format(block["Id"]))
-            if "Relationships" in block:
-                print("Relationships: {}".format(block["Relationships"]))
-            print("Bounding Box: {}".format(block["Geometry"]["BoundingBox"]))
-            print("Polygon: {}".format(block["Geometry"]["Polygon"]))
-            print()
             draw = ImageDraw.Draw(image)
             # Draw WORD - Green -  start of word, red - end of word
             if block["BlockType"] == "WORD":
@@ -125,13 +183,42 @@ def lambda_handler(event, context):
             Key=annotated_document,
             Body=in_mem_file,
         )
-        print(len(blocks))
+        # print(len(blocks))
     document_text = "\n\n".join(total_text)
     raw_text_document = f"processed/{filename}/{filename}_raw_text.txt"
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
         temp_file.write(document_text)
         temp_file_path = temp_file.name
         s3_client.upload_file(temp_file_path, bucket, raw_text_document)
+
+    # Get the tables
+    table_response = textract_client.analyze_document(
+        Document={"S3Object": {"Bucket": bucket, "Name": document}},
+        FeatureTypes=["TABLES"],
+    )
+    table_blocks = table_response["Blocks"]
+    # pprint(blocks)
+
+    blocks_map = {}
+    table_blocks = []
+    for block in blocks:
+        blocks_map[block["Id"]] = block
+        if block["BlockType"] == "TABLE":
+            table_blocks.append(block)
+
+    if len(table_blocks) <= 0:
+        logging.warn("No table found.")
+    else:
+        logging.info("processing table.")
+        for index, table in enumerate(table_blocks):
+            csv += generate_table_csv(table, blocks_map, index + 1)
+            csv += "\n\n"
+
+        table_document = f"processed/{filename}/{filename}_table_extract.csv"
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_file.write(csv)
+            temp_file_path = temp_file.name
+            s3_client.upload_file(temp_file_path, bucket, table_document)
 
 
 if __name__ == "__main__":
@@ -159,7 +246,7 @@ if __name__ == "__main__":
                             "arn": "arn:aws:s3:::test-bucket-rcanillas-28012025",
                         },
                         "object": {
-                            "key": "raw/1737997243451.pdf",
+                            "key": "raw/table_exemple.pdf",
                             "size": 357927,
                             "eTag": "5294a0e02abed3df1294758f16a5fb5f",
                             "sequencer": "006798EE5DE7E79F7F",

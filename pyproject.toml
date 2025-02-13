@@ -8,4 +8,5 @@ version = "0.1.0"
 dependencies = [
     "boto3>=1.36.7",
     "pymupdf>=1.25.2"
+    "pillow">=11.1.0"
 ]
